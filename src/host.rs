@@ -162,27 +162,22 @@ payload: r#"payload = """{}""""#
 rawloader: "base64.standard_b64decode(payload)"
 compressloader: "zlib.decompress(base64.standard_b64decode(payload))"
 executor: r#"
-import ctypes
-import subprocess
-import os
 import base64
+import os
+import sys
+import tempfile
 import zlib
-
 
 binary = {}
 
-libc = ctypes.CDLL(None)
-memfd_create = libc.memfd_create
-memfd_create.restype = ctypes.c_int
-memfd_create.argtypes = [ctypes.c_char_p, ctypes.c_uint]
-fd = memfd_create(b"", 0)
-if fd == -1:
-	raise OSError("Failed to create memfd")
+fd, name = tempfile.mkstemp()
 os.write(fd, binary)
-pid = os.getpid()
-try:
-	subprocess.run([f"/proc/{{pid}}/fd/{{fd}}"])
-finally:
-	os.close(fd)
+os.close(fd)
+
+os.chmod(name, 0o700)
+
+args = list(sys.argv)
+args[0] = name
+os.execv(name, args)
 "#
 }
