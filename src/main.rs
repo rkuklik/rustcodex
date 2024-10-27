@@ -48,6 +48,7 @@ fn main() -> Result<(), Terminator> {
         None => Box::new(BufReader::new(stdin().lock())),
         Some(file) => Box::new(BufReader::new(
             File::options()
+                .read(true)
                 .write(false)
                 .truncate(false)
                 .create(false)
@@ -63,6 +64,7 @@ fn main() -> Result<(), Terminator> {
         None => Box::new(BufWriter::new(stdout().lock())),
         Some(file) => Box::new(BufWriter::new(
             File::options()
+                .read(false)
                 .write(true)
                 .truncate(true)
                 .create(true)
