@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use clap::ValueEnum;
+use clap::ValueHint;
 
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
 #[command(author, version, about, arg_required_else_help = true)]
@@ -11,7 +12,7 @@ pub struct Cli {
     pub target: Language,
 
     /// Manually specified source files
-    #[arg(short, long = "file", env)]
+    #[arg(short, long = "file", env, value_hint = ValueHint::FilePath)]
     pub files: Vec<PathBuf>,
 
     #[arg(short, long, env)]
@@ -23,7 +24,7 @@ pub struct Cli {
     pub compress: bool,
 
     /// Input (defaults to stdin)
-    #[arg(short, long, env)]
+    #[arg(short, long, env, value_hint = ValueHint::ExecutablePath)]
     pub input: Option<PathBuf>,
 
     /// Output (defaults to stdout)
