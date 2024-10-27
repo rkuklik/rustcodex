@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::fs::OpenOptions;
 use std::io::stdin;
 use std::io::stdout;
 use std::io::BufRead;
@@ -8,6 +7,7 @@ use std::io::BufWriter;
 use std::io::Write;
 
 use anyhow::anyhow;
+use anyhow::Context;
 use rustcodex::cli::Language;
 use rustcodex::host::Python;
 use rustcodex::source::MergedSources;
@@ -42,15 +42,20 @@ fn main() -> Result<(), terminator::Terminator> {
         }),
     };
 
-    let payload: Box<dyn BufRead> = match input {
+    let mut payload: Box<dyn BufRead> = match input {
         None => Box::new(BufReader::new(stdin().lock())),
         Some(file) => Box::new(BufReader::new(File::open(file)?)),
     };
 
+    // Ensure that payload is readable
+    payload
+        .fill_buf()
+        .with_context(|| "input must be readable")?;
+
     let mut output: Box<dyn Write> = match output {
         None => Box::new(BufWriter::new(stdout().lock())),
         Some(file) => Box::new(BufWriter::new(
-            OpenOptions::new()
+            File::options()
                 .write(true)
                 .truncate(true)
                 .create(true)
