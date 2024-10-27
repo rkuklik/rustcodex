@@ -110,6 +110,7 @@ impl Source for Rust {
         let mut files = expander("src".as_ref())?;
         files.sort_unstable_by(
             |first, second| match (first.name.as_str(), second.name.as_str()) {
+                (first, second) if first == second => Ordering::Equal,
                 ("src/main.rs", _) => Ordering::Less,
                 (_, "src/main.rs") => Ordering::Greater,
                 ("src/lib.rs", _) => Ordering::Less,

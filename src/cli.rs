@@ -24,7 +24,7 @@ pub struct Cli {
     pub compress: bool,
 
     /// Input (defaults to stdin)
-    #[arg(short, long, env, value_hint = ValueHint::ExecutablePath)]
+    #[arg(short, long, env, value_hint = ValueHint::FilePath)]
     pub input: Option<PathBuf>,
 
     /// Output (defaults to stdout)

@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::fs::File;
 use std::io::stdin;
 use std::io::stdout;
@@ -8,17 +9,18 @@ use std::io::Write;
 
 use anyhow::anyhow;
 use anyhow::Context;
+use rustcodex::cli::Cli;
 use rustcodex::cli::Language;
 use rustcodex::host::Python;
 use rustcodex::source::MergedSources;
 use rustcodex::source::Rust;
 use rustcodex::source::Source;
+use terminator::Config;
+use terminator::Terminator;
 use terminator::Verbosity;
 
-use rustcodex::cli::Cli;
-
-fn main() -> Result<(), terminator::Terminator> {
-    terminator::Config::new()
+fn main() -> Result<(), Terminator> {
+    Config::new()
         .verbosity(Verbosity::error().unwrap_or(Verbosity::Medium))
         .install()?;
 
@@ -44,13 +46,18 @@ fn main() -> Result<(), terminator::Terminator> {
 
     let mut payload: Box<dyn BufRead> = match input {
         None => Box::new(BufReader::new(stdin().lock())),
-        Some(file) => Box::new(BufReader::new(File::open(file)?)),
+        Some(file) => Box::new(BufReader::new(
+            File::options()
+                .write(false)
+                .truncate(false)
+                .create(false)
+                .open(file)
+                .context("opening input file failed")?,
+        )),
     };
 
     // Ensure that payload is readable
-    payload
-        .fill_buf()
-        .with_context(|| "input must be readable")?;
+    payload.fill_buf().context("input isn't readable")?;
 
     let mut output: Box<dyn Write> = match output {
         None => Box::new(BufWriter::new(stdout().lock())),
@@ -59,16 +66,17 @@ fn main() -> Result<(), terminator::Terminator> {
                 .write(true)
                 .truncate(true)
                 .create(true)
-                .open(file)?,
+                .open(file)
+                .context("opening output file failed")?,
         )),
     };
 
-    let template = match target {
+    let template: Box<dyn Display> = match target {
         Language::Python => Box::new(Python::new(payload, source, compress)),
         Language::Rust => Err(anyhow!("`Rust` doesn't have runner"))?,
     };
 
-    output.write_fmt(format_args!("{template}"))?;
+    write!(output, "{template}")?;
 
     Ok(())
 }
