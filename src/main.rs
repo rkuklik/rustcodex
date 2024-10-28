@@ -12,7 +12,6 @@ use anyhow::Context;
 use rustcodex::cli::Cli;
 use rustcodex::cli::Language;
 use rustcodex::host::Python;
-use rustcodex::source::MergedSources;
 use rustcodex::source::Rust;
 use rustcodex::source::Source;
 use terminator::Config;
@@ -33,15 +32,14 @@ fn main() -> Result<(), Terminator> {
         output,
     } = Cli::parse();
 
-    let source: Box<dyn Source> = match source {
-        None => Box::new(files),
-        Some(source) => Box::new(MergedSources {
-            first: files,
-            second: match source {
+    let source = match source {
+        None => files.erase(),
+        Some(source) => files
+            .merge(match source {
                 Language::Rust => Rust,
                 Language::Python => Err(anyhow!("`Python` doesn't have source detector"))?,
-            },
-        }),
+            })
+            .erase(),
     };
 
     let mut payload: Box<dyn BufRead> = match input {

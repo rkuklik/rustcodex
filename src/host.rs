@@ -87,7 +87,7 @@ macro_rules! template {
             S: Source + 'static,
         {
             reader: RefCell<R>,
-            sources: S,
+            sources: RefCell<Option<S>>,
             compress: bool,
         }
 
@@ -99,7 +99,7 @@ macro_rules! template {
             pub fn new(payload: R, sources: S, compress: bool) -> Self {
                 Self {
                     reader: RefCell::new(payload),
-                    sources,
+                    sources: RefCell::new(Some(sources)),
                     compress,
                 }
             }
@@ -118,6 +118,14 @@ macro_rules! template {
                 } = self;
                 let compress = *compress;
 
+                #[allow(unused)]
+                let sources = sources
+                    .borrow_mut()
+                    .take()
+                    .expect("template can be used only once")
+                    .sources()
+                    .expect("source inclusion failed");
+
                 $(
                 writeln!(f, concat!("#!", $shebang))?;
                 )?
@@ -130,7 +138,7 @@ macro_rules! template {
                     concat!($comment, "Heuristically determined source files:")
                 )?;
 
-                for source in sources.sources().expect("source inclusion failed") {
+                for source in sources {
                     writeln!(f, concat!($comment, "SOURCE FILE: {}"), source.name)?;
                     for line in source.code.lines() {
                         writeln!(f, concat!($comment, "{}"), line)?;

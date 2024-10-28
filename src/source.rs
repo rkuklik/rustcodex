@@ -1,19 +1,24 @@
 use std::cmp::Ordering;
-use std::fmt::Debug;
 use std::fs::read_dir;
 use std::fs::read_to_string;
-use std::io;
+use std::io::Error;
+use std::iter::Chain;
 use std::path::Path;
-use std::path::PathBuf;
-
-use anyhow::Context;
-use anyhow::Error;
-use either::Either;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
     pub name: String,
     pub code: String,
+}
+
+impl SourceFile {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = path.as_ref();
+        read_to_string(path).map(|code| SourceFile {
+            name: path.display().to_string(),
+            code,
+        })
+    }
 }
 
 impl PartialOrd for SourceFile {
@@ -31,72 +36,104 @@ impl Ord for SourceFile {
     }
 }
 
-impl Source for Vec<PathBuf> {
-    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, anyhow::Error> {
-        let files = self
-            .iter()
-            .map(|path| {
-                Ok::<_, io::Error>(SourceFile {
-                    name: path.display().to_string(),
-                    code: read_to_string(path.as_path())?,
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Box::new(files.into_iter()))
-    }
-}
-
-pub struct MergedSources<F, S>
-where
-    F: Source,
-    S: Source,
-{
-    pub first: F,
-    pub second: S,
-}
-
-impl<F, S> Source for MergedSources<F, S>
-where
-    F: Source,
-    S: Source,
-{
-    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, anyhow::Error> {
-        let iter = self.first.sources()?.chain(self.second.sources()?);
-        Ok(Box::new(iter))
-    }
-}
-
 pub trait Source {
-    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, anyhow::Error>;
-}
-
-impl Source for Box<dyn Source> {
-    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, anyhow::Error> {
-        (**self).sources()
+    type Container: IntoIterator<Item = SourceFile>;
+    fn sources(self) -> Result<Self::Container, Error>;
+    fn merge<O>(self, other: O) -> Merged<Self, O>
+    where
+        Self: Sized,
+        O: Sized + Source,
+    {
+        Merged {
+            first: self,
+            second: other,
+        }
+    }
+    fn erase(self) -> Erased
+    where
+        Self: Sized + 'static,
+    {
+        Erased::sourced(self)
     }
 }
 
-fn expander(path: &Path) -> Result<Vec<SourceFile>, Error> {
-    let iter = read_dir(path)
-        .map_err(Error::from)
-        .with_context(|| format!("`{}` must be accessible", path.display()))?
-        .map(|entry| {
-            let entry = entry?;
-            let path = entry.path();
-            Ok::<_, Error>(if entry.file_type()?.is_dir() {
-                Either::Left(expander(path.as_path())?)
-            } else {
-                Either::Right(SourceFile {
-                    name: path.display().to_string(),
-                    code: read_to_string(path.as_path())?,
-                })
-            })
-        });
-    let mut buf = Vec::new();
-    for item in iter {
-        match item? {
-            Either::Left(mut vec) => buf.append(&mut vec),
-            Either::Right(source) => buf.push(source),
+pub struct Merged<F, S>
+where
+    F: Source,
+    S: Source,
+{
+    first: F,
+    second: S,
+}
+
+impl<F, S> Source for Merged<F, S>
+where
+    F: Source,
+    S: Source,
+{
+    #[rustfmt::skip]
+    type Container = Chain<
+        <F::Container as IntoIterator>::IntoIter,
+        <S::Container as IntoIterator>::IntoIter
+    >;
+    fn sources(self) -> Result<Self::Container, Error> {
+        Ok(self
+            .first
+            .sources()?
+            .into_iter()
+            .chain(self.second.sources()?))
+    }
+}
+
+pub type ErasedIter = Box<dyn Iterator<Item = SourceFile>>;
+
+pub struct Erased {
+    source: Box<dyn FnOnce() -> Result<ErasedIter, Error>>,
+}
+
+impl Erased {
+    fn sourced<S: Source + 'static>(source: S) -> Self {
+        let convert = |typed: S::Container| Box::new(typed.into_iter()) as ErasedIter;
+        let source = Box::new(move || source.sources().map(convert));
+        Self { source }
+    }
+}
+
+impl Source for Erased {
+    type Container = ErasedIter;
+    fn sources(self) -> Result<Self::Container, Error> {
+        (self.source)()
+    }
+}
+
+impl<T, P> Source for T
+where
+    P: AsRef<Path>,
+    T: IntoIterator<Item = P>,
+{
+    type Container = Vec<SourceFile>;
+    fn sources(self) -> Result<Self::Container, Error> {
+        self.into_iter().map(SourceFile::load).collect()
+    }
+}
+
+//impl Source for Box<dyn Source> {
+//    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, Error> {
+//        (**self).sources()
+//    }
+//}
+
+fn expander<'a, 'b: 'a>(
+    buf: &'b mut Vec<SourceFile>,
+    path: &Path,
+) -> Result<&'a mut Vec<SourceFile>, Error> {
+    for entry in read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            expander(buf, path.as_path())?;
+        } else {
+            buf.push(SourceFile::load(path)?)
         }
     }
     Ok(buf)
@@ -106,18 +143,19 @@ fn expander(path: &Path) -> Result<Vec<SourceFile>, Error> {
 pub struct Rust;
 
 impl Source for Rust {
-    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, anyhow::Error> {
-        let mut files = expander("src".as_ref())?;
-        files.sort_unstable_by(
-            |first, second| match (first.name.as_str(), second.name.as_str()) {
+    type Container = Vec<SourceFile>;
+    fn sources(self) -> Result<Self::Container, Error> {
+        let mut files = Vec::new();
+        expander(&mut files, "src".as_ref())?.sort_unstable_by(|first, second| {
+            match (first.name.as_str(), second.name.as_str()) {
                 (first, second) if first == second => Ordering::Equal,
                 ("src/main.rs", _) => Ordering::Less,
                 (_, "src/main.rs") => Ordering::Greater,
                 ("src/lib.rs", _) => Ordering::Less,
                 (_, "src/lib.rs") => Ordering::Greater,
                 _ => first.cmp(second),
-            },
-        );
-        Ok(Box::new(files.into_iter()))
+            }
+        });
+        Ok(files)
     }
 }

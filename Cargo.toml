@@ -18,7 +18,6 @@ complexity = "warn"
 anyhow = "1.0"
 base64 = "0.22"
 clap = { version = "4.5", features = ["cargo", "derive", "env"] }
-either = "1.13"
 flate2 = "1.0"
 terminator = { version = "0.3", features = ["anyhow"] }
 
