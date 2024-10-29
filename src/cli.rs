@@ -19,10 +19,6 @@ pub struct Cli {
     /// Get files for source language
     pub source: Option<Language>,
 
-    /// Compress the binary
-    #[arg(short, long, env)]
-    pub compress: bool,
-
     /// Input (defaults to stdin)
     #[arg(short, long, env, value_hint = ValueHint::FilePath)]
     pub input: Option<PathBuf>,

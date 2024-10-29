@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::fs::File;
 use std::io::stdin;
 use std::io::stdout;
@@ -10,7 +9,9 @@ use anyhow::anyhow;
 use anyhow::Context;
 use rustcodex::cli::Cli;
 use rustcodex::cli::Language;
+use rustcodex::host::Data;
 use rustcodex::host::Python;
+use rustcodex::host::Template;
 use rustcodex::source::Rust;
 use rustcodex::source::Source;
 use terminator::Config;
@@ -26,7 +27,6 @@ fn main() -> Result<(), Terminator> {
         target,
         files,
         source,
-        compress,
         input,
         output,
     } = Cli::parse();
@@ -68,8 +68,11 @@ fn main() -> Result<(), Terminator> {
         )),
     };
 
-    let template: Box<dyn Display> = match target {
-        Language::Python => Box::new(Python::new(payload.as_slice(), source.as_slice(), compress)),
+    let data = Data::new(&payload, &source);
+    let template = Template::new(data);
+
+    let template = match target {
+        Language::Python => template.transform::<Python>().erase(),
         Language::Rust => Err(anyhow!("`Rust` doesn't have runner"))?,
     };
 
