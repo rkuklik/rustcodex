@@ -1,23 +1,36 @@
 use std::cmp::Ordering;
 use std::fs::read_dir;
-use std::fs::read_to_string;
+use std::fs::File;
 use std::io::Error;
-use std::iter::Chain;
+use std::io::Read;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
-    pub name: String,
-    pub code: String,
+    inner: Box<str>,
+    split: usize,
 }
 
 impl SourceFile {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
-        read_to_string(path).map(|code| SourceFile {
-            name: path.display().to_string(),
-            code,
+        let mut file = File::open(path)?;
+        let mut buf = path.display().to_string();
+        let split = buf.len();
+        buf.try_reserve_exact(file.metadata()?.len() as usize)?;
+        file.read_to_string(&mut buf)?;
+        Ok(Self {
+            inner: buf.into_boxed_str(),
+            split,
         })
+    }
+
+    pub fn name(&self) -> &str {
+        &self.inner[0..self.split]
+    }
+
+    pub fn code(&self) -> &str {
+        &self.inner[self.split..]
     }
 }
 
@@ -29,16 +42,20 @@ impl PartialOrd for SourceFile {
 
 impl Ord for SourceFile {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.name.cmp(&other.name) {
-            Ordering::Equal => self.code.cmp(&other.code),
+        match self.name().cmp(other.name()) {
+            Ordering::Equal => self.code().cmp(other.code()),
             ord => ord,
         }
     }
 }
 
 pub trait Source {
-    type Container: IntoIterator<Item = SourceFile>;
-    fn sources(self) -> Result<Self::Container, Error>;
+    fn extend(&self, buf: &mut Vec<SourceFile>) -> Result<(), Error>;
+    fn sources(&self) -> Result<Vec<SourceFile>, Error> {
+        let mut buf = Vec::new();
+        self.extend(&mut buf)?;
+        Ok(buf)
+    }
     fn merge<O>(self, other: O) -> Merged<Self, O>
     where
         Self: Sized,
@@ -48,12 +65,6 @@ pub trait Source {
             first: self,
             second: other,
         }
-    }
-    fn erase(self) -> Erased
-    where
-        Self: Sized + 'static,
-    {
-        Erased::sourced(self)
     }
 }
 
@@ -71,57 +82,26 @@ where
     F: Source,
     S: Source,
 {
-    #[rustfmt::skip]
-    type Container = Chain<
-        <F::Container as IntoIterator>::IntoIter,
-        <S::Container as IntoIterator>::IntoIter
-    >;
-    fn sources(self) -> Result<Self::Container, Error> {
-        Ok(self
-            .first
-            .sources()?
-            .into_iter()
-            .chain(self.second.sources()?))
+    fn extend(&self, buf: &mut Vec<SourceFile>) -> Result<(), Error> {
+        self.first.extend(buf)?;
+        self.second.extend(buf)?;
+        Ok(())
     }
 }
 
-pub type ErasedIter = Box<dyn Iterator<Item = SourceFile>>;
-
-pub struct Erased {
-    source: Box<dyn FnOnce() -> Result<ErasedIter, Error>>,
-}
-
-impl Erased {
-    fn sourced<S: Source + 'static>(source: S) -> Self {
-        let convert = |typed: S::Container| Box::new(typed.into_iter()) as ErasedIter;
-        let source = Box::new(move || source.sources().map(convert));
-        Self { source }
-    }
-}
-
-impl Source for Erased {
-    type Container = ErasedIter;
-    fn sources(self) -> Result<Self::Container, Error> {
-        (self.source)()
-    }
-}
-
-impl<T, P> Source for T
+impl<P> Source for Vec<P>
 where
     P: AsRef<Path>,
-    T: IntoIterator<Item = P>,
 {
-    type Container = Vec<SourceFile>;
-    fn sources(self) -> Result<Self::Container, Error> {
-        self.into_iter().map(SourceFile::load).collect()
+    fn extend(&self, buf: &mut Vec<SourceFile>) -> Result<(), Error> {
+        let iter = self.iter().map(SourceFile::load);
+        buf.try_reserve(self.len())?;
+        for file in iter {
+            buf.push(file?);
+        }
+        Ok(())
     }
 }
-
-//impl Source for Box<dyn Source> {
-//    fn sources(&self) -> Result<Box<dyn Iterator<Item = SourceFile>>, Error> {
-//        (**self).sources()
-//    }
-//}
 
 fn expander<'a, 'b: 'a>(
     buf: &'b mut Vec<SourceFile>,
@@ -143,11 +123,9 @@ fn expander<'a, 'b: 'a>(
 pub struct Rust;
 
 impl Source for Rust {
-    type Container = Vec<SourceFile>;
-    fn sources(self) -> Result<Self::Container, Error> {
-        let mut files = Vec::new();
-        expander(&mut files, "src".as_ref())?.sort_unstable_by(|first, second| {
-            match (first.name.as_str(), second.name.as_str()) {
+    fn extend(&self, buf: &mut Vec<SourceFile>) -> Result<(), Error> {
+        expander(buf, "src".as_ref())?.sort_unstable_by(|first, second| {
+            match (first.name(), second.name()) {
                 (first, second) if first == second => Ordering::Equal,
                 ("src/main.rs", _) => Ordering::Less,
                 (_, "src/main.rs") => Ordering::Greater,
@@ -156,6 +134,6 @@ impl Source for Rust {
                 _ => first.cmp(second),
             }
         });
-        Ok(files)
+        Ok(())
     }
 }

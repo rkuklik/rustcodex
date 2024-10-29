@@ -1,9 +1,7 @@
-use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::io;
-use std::io::BufRead;
 use std::io::ErrorKind;
 use std::io::Write;
 
@@ -12,7 +10,7 @@ use base64::write::EncoderWriter;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 
-use crate::source::Source;
+use crate::source::SourceFile;
 
 struct IoCompat<'m, 'f> {
     f: &'m mut Formatter<'f>,
@@ -32,40 +30,27 @@ impl<'m, 'f> Write for IoCompat<'m, 'f> {
     }
 }
 
-struct PayloadBuilder<'a, R: BufRead> {
-    reader: &'a RefCell<R>,
+struct PayloadBuilder<'a> {
+    payload: &'a [u8],
     compress: bool,
 }
 
-impl<'a, R: BufRead> Display for PayloadBuilder<'a, R> {
+impl<'a> Display for PayloadBuilder<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        macro_rules! looper {
-            ($reader:ident, $writer:ident) => {
-                loop {
-                    let part = $reader.fill_buf().expect("reading native code failed");
-                    let len = part.len();
-                    if len == 0 {
-                        break;
-                    }
-                    $writer.write_all(part).expect("writing native code failed");
-                    $reader.consume(len);
-                }
-                $writer.finish().expect("writing native code failed");
-            };
-        }
-
-        let Self { reader, compress } = *self;
+        let Self { payload, compress } = *self;
         let iocompat = IoCompat { f };
-        let mut reader = reader.borrow_mut();
+        let error = "payload builder wrote invalid data";
         if compress {
             let mut writer = ZlibEncoder::new(
                 EncoderWriter::new(iocompat, &BASE64_STANDARD),
                 Compression::best(),
             );
-            looper!(reader, writer);
+            writer.write_all(payload).expect(error);
+            writer.finish().expect(error);
         } else {
             let mut writer = EncoderWriter::new(iocompat, &BASE64_STANDARD);
-            looper!(reader, writer);
+            writer.write_all(payload).expect(error);
+            writer.finish().expect(error);
         }
 
         Ok(())
@@ -81,50 +66,30 @@ macro_rules! template {
         compressloader: $compressloader:literal
         executor: $exec:literal
     ) => {
-        pub struct $name<R, S>
-        where
-            R: BufRead + 'static,
-            S: Source + 'static,
-        {
-            reader: RefCell<R>,
-            sources: RefCell<Option<S>>,
+        pub struct $name<'s> {
+            payload: &'s [u8],
+            sources: &'s [SourceFile],
             compress: bool,
         }
 
-        impl<R, S> $name<R, S>
-        where
-            R: BufRead + 'static,
-            S: Source + 'static,
-        {
-            pub fn new(payload: R, sources: S, compress: bool) -> Self {
+        impl<'s> $name<'s> {
+            pub fn new(payload: &'s [u8], sources: &'s [SourceFile], compress: bool) -> Self {
                 Self {
-                    reader: RefCell::new(payload),
-                    sources: RefCell::new(Some(sources)),
+                    payload,
+                    sources,
                     compress,
                 }
             }
         }
 
-        impl<R, S> fmt::Display for $name<R, S>
-        where
-            R: BufRead + 'static,
-            S: Source + 'static,
-        {
+        impl fmt::Display for $name<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let Self {
-                    reader,
+                    payload,
                     sources,
                     compress,
                 } = self;
                 let compress = *compress;
-
-                #[allow(unused)]
-                let sources = sources
-                    .borrow_mut()
-                    .take()
-                    .expect("template can be used only once")
-                    .sources()
-                    .expect("source inclusion failed");
 
                 $(
                 writeln!(f, concat!("#!", $shebang))?;
@@ -138,9 +103,9 @@ macro_rules! template {
                     concat!($comment, "Heuristically determined source files:")
                 )?;
 
-                for source in sources {
-                    writeln!(f, concat!($comment, "SOURCE FILE: {}"), source.name)?;
-                    for line in source.code.lines() {
+                for source in *sources {
+                    writeln!(f, concat!($comment, "SOURCE FILE: {}"), source.name())?;
+                    for line in source.code().lines() {
                         writeln!(f, concat!($comment, "{}"), line)?;
                     }
                 }
@@ -149,7 +114,7 @@ macro_rules! template {
                 write!(
                     f,
                     $exec,
-                    PayloadBuilder { reader, compress },
+                    PayloadBuilder { payload, compress },
                     if compress {
                         $compressloader
                     } else {
