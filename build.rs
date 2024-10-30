@@ -1,4 +1,5 @@
 use std::fs;
+use std::fs::read_dir;
 use std::io::Error;
 
 use clap::CommandFactory;
@@ -22,6 +23,17 @@ fn main() -> Result<(), Error> {
     }
 
     println!("cargo::rerun-if-changed=src/cli.rs");
+
+    for template in read_dir("templates")? {
+        let file = template?;
+        let name = file.file_name();
+        let name = name.to_str().expect("UTF-8 name");
+        assert!(name.find('=').is_none());
+        let path = file.path().canonicalize()?;
+        let path = path.display();
+        println!("cargo::rustc-env=TEMPLATE_{name}={path}");
+        println!("cargo::rerun-if-changed=templates/{name}");
+    }
 
     Ok(())
 }
