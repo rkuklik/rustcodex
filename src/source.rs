@@ -5,6 +5,8 @@ use std::io::Error;
 use std::io::Read;
 use std::path::Path;
 
+use crate::lang::Rust;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
     inner: Box<str>,
@@ -113,14 +115,11 @@ fn expander<'a, 'b: 'a>(
         if entry.file_type()?.is_dir() {
             expander(buf, path.as_path())?;
         } else {
-            buf.push(SourceFile::load(path)?)
+            buf.push(SourceFile::load(path)?);
         }
     }
     Ok(buf)
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Rust;
 
 impl Source for Rust {
     fn extend(&self, buf: &mut Vec<SourceFile>) -> Result<(), Error> {

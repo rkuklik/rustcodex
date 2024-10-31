@@ -11,6 +11,7 @@ use base64::write::EncoderWriter;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 
+use crate::lang::Python;
 use crate::source::SourceFile;
 
 struct IoCompat<'m, 'f> {
@@ -123,9 +124,6 @@ macro_rules! template {
         file: $file:literal
         comment: $comment:literal
     ) => {
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-        pub struct $name;
-
         impl Display for Template<'_, $name> {
             fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                 let Data { payload, sources } = self.data;

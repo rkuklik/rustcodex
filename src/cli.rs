@@ -9,7 +9,7 @@ use clap::ValueHint;
 pub struct Cli {
     /// Language to target as host
     #[arg(short, long, env)]
-    pub target: Language,
+    pub target: TargetLanguage,
 
     /// Manually specified source files
     #[arg(short, long = "file", env, value_hint = ValueHint::FilePath)]
@@ -17,7 +17,7 @@ pub struct Cli {
 
     #[arg(short, long, env)]
     /// Get files for source language
-    pub source: Option<Language>,
+    pub source: Option<SourceLanguage>,
 
     /// Input (defaults to stdin)
     #[arg(short, long, env, value_hint = ValueHint::FilePath)]
@@ -36,17 +36,11 @@ impl Cli {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
-pub enum Language {
+pub enum TargetLanguage {
     Python,
-    Rust,
 }
 
-impl Language {
-    #[must_use]
-    pub const fn extension(self) -> &'static str {
-        match self {
-            Self::Python => "py",
-            Self::Rust => "rs",
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
+pub enum SourceLanguage {
+    Rust,
 }

@@ -5,14 +5,14 @@ use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
 
-use anyhow::anyhow;
 use anyhow::Context;
 use rustcodex::cli::Cli;
-use rustcodex::cli::Language;
+use rustcodex::cli::SourceLanguage;
+use rustcodex::cli::TargetLanguage;
 use rustcodex::host::Data;
-use rustcodex::host::Python;
 use rustcodex::host::Template;
-use rustcodex::source::Rust;
+use rustcodex::lang::Python;
+use rustcodex::lang::Rust;
 use rustcodex::source::Source;
 use terminator::Config;
 use terminator::Terminator;
@@ -32,14 +32,11 @@ fn main() -> Result<(), Terminator> {
     } = Cli::parse();
 
     let source = match source {
-        None => files.sources(),
-        Some(source) => files
-            .merge(match source {
-                Language::Rust => Rust,
-                Language::Python => Err(anyhow!("`Python` doesn't have source detector"))?,
-            })
-            .sources(),
-    }?;
+        None => files.sources()?,
+        Some(source) => match source {
+            SourceLanguage::Rust => files.merge(Rust).sources()?,
+        },
+    };
 
     let mut payload = Vec::new();
     match input {
@@ -72,8 +69,7 @@ fn main() -> Result<(), Terminator> {
     let template = Template::new(data);
 
     let template = match target {
-        Language::Python => template.transform::<Python>().erase(),
-        Language::Rust => Err(anyhow!("`Rust` doesn't have runner"))?,
+        TargetLanguage::Python => template.transform::<Python>().erase(),
     };
 
     write!(output, "{template}")?;
