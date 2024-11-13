@@ -1,23 +1,20 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use clap::ValueEnum;
 use clap::ValueHint;
 
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
 #[command(author, version, about, arg_required_else_help = true)]
 pub struct Cli {
     /// Language to target as host
+    // `Cli` is inlined into build script, but `Language` is generated from it.
+    #[cfg(nonrecursive)]
     #[arg(short, long, env)]
-    pub target: TargetLanguage,
+    pub target: crate::lang::Language,
 
     /// Manually specified source files
-    #[arg(short, long = "file", env, value_hint = ValueHint::FilePath)]
-    pub files: Vec<PathBuf>,
-
-    #[arg(short, long, env)]
-    /// Get files for source language
-    pub source: Option<SourceLanguage>,
+    #[arg(short, long = "source", env, value_hint = ValueHint::FilePath, num_args = 0..)]
+    pub sources: Vec<PathBuf>,
 
     /// Input (defaults to stdin)
     #[arg(short, long, env, value_hint = ValueHint::FilePath)]
@@ -33,14 +30,4 @@ impl Cli {
     pub fn parse() -> Self {
         Parser::parse()
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
-pub enum TargetLanguage {
-    Python,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
-pub enum SourceLanguage {
-    Rust,
 }

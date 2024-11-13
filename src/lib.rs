@@ -1,4 +1,5 @@
+#[doc(hidden)]
 pub mod cli;
-pub mod host;
+pub mod inout;
 pub mod lang;
 pub mod source;
