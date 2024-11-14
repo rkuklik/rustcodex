@@ -14,7 +14,7 @@ While really cool, are you sure this is the intended way to solve ReCodEx exerci
 
 ## Usage
 
-`rustcodex` is a CLI tool with its interface documented obtained by running
+`rustcodex` is a CLI tool with its interface documented inline by running
 `rustcodex --help`. Following example demonstrates how to inline release build
 of this tool (including its source code) into python:
 
@@ -36,7 +36,10 @@ preceding the first `.` will be used as the template's name.
 Apart from code itself, the template must contain two directives (literal strings).
 `__SOURCE__` directive must be placed in a comment and will be used to inline
 source code into the final output. `__PAYLOAD__` directive will replaced with
-base64 encoded gzip compressed binary.
+base64 encoded gzip compressed binary. `__SOURCE__` must come before `__PAYLOAD__`.
 
-Failure to comply with these requirements will result in punishment manifesting
+Additionally, the template should should `exec` uncompressed payload, passing through
+`argv` with `argv[0]` set to `binary`.
+
+Failure to comply with directive requirements will result in punishment manifesting
 in build error.

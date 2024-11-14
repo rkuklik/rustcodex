@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt;
 use std::fmt::Write;
 use std::fs::create_dir_all;
 use std::fs::exists;
@@ -19,8 +20,10 @@ const APP: &str = "rustcodex";
 include!("src/cli.rs");
 
 fn main() -> Result<(), Error> {
-    // Generate code for each template in `templates` directory
-    let mut generator = Codegenerator::new();
+    // hold onto each language discovered for completion generation
+    let mut langs = Vec::<String>::new();
+    let mut codegen = TemplateGen::new();
+    // generate code for each template in `templates` directory
     for template in read_dir("templates")? {
         let file = template?;
         assert!(file.file_type()?.is_file());
@@ -28,14 +31,15 @@ fn main() -> Result<(), Error> {
         let name = name.to_str().expect("UTF-8 name");
 
         let language = name
-            .split_once(".")
+            .split_once('.')
             .expect("template name must be in format `language.suffix`")
             .0;
         let template = read_to_string(file.path())?;
-        generator.add(template.as_str(), language);
+
+        codegen.add(template.as_str(), language);
+        langs.push(language.into())
     }
-    generator.finalize();
-    generator.generate()?;
+    codegen.generate()?;
 
     if !exists(DIR)? {
         create_dir_all(DIR)?;
@@ -49,15 +53,14 @@ fn main() -> Result<(), Error> {
             .long("target")
             .short('t')
             .env("TARGET")
-            .value_parser(PossibleValuesParser::new(
-                generator.langs.iter().map(|lang| &lang.original),
-            )),
+            .value_parser(PossibleValuesParser::new(langs)),
     );
 
     for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
         generate_to(shell, &mut app, APP, DIR)?;
     }
 
+    // add cargo directives
     println!("cargo::rerun-if-changed=templates");
     println!("cargo::rerun-if-changed=src/cli.rs");
     println!("cargo::rerun-if-changed=src/target.rs");
@@ -66,21 +69,44 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-struct LangDef {
-    original: String,
-    idiomatic: String,
+struct Language {
+    name: String,
 }
 
-struct Codegenerator {
+impl Language {
+    fn new(name: &str) -> Self {
+        let msg = "language name must be only Ascii alphabetic";
+        Self {
+            name: name
+                .chars()
+                .inspect(|char| assert!(char.is_ascii_alphabetic(), "{msg}"))
+                .enumerate()
+                .map(|(index, char)| match index {
+                    0 => char.to_ascii_uppercase(),
+                    _ => char.to_ascii_lowercase(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl fmt::Display for Language {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
+struct TemplateGen {
     // could be written directly to a file, but templates should be small
     buf: String,
-    langs: Vec<LangDef>,
+    langs: Vec<Language>,
 }
 
-impl Codegenerator {
+impl TemplateGen {
     const S: &str = "__SOURCE__";
     const P: &str = "__PAYLOAD__";
 
+    /// Setup codegen
     fn new() -> Self {
         Self {
             buf: String::from("// Generated from `build.rs`. DO NOT EDIT!\n"),
@@ -88,43 +114,46 @@ impl Codegenerator {
         }
     }
 
+    /// Add language definition to generator
     fn add(&mut self, template: &str, name: &str) {
         let assertion = |tag| move || panic!("template must contain single {tag} directive");
+        fn second<'a>((_, second): (&str, &'a str)) -> &'a str {
+            second
+        }
+        fn nocontain(tag: &'static str) -> impl Fn(&str) -> Option<&str> {
+            move |next: &str| (!next.contains(tag)).then_some(next)
+        }
+        // verify template directive correctness
         template
             .split_once(Self::S)
-            .and_then(|(_, post)| (!post.contains(Self::S)).then_some(post))
+            .map(second)
+            .and_then(nocontain(Self::S))
             .unwrap_or_else(assertion(Self::S))
             .split_once(Self::P)
-            .and_then(|(_, post)| (!post.contains(Self::P)).then_some(post))
+            .map(second)
+            .and_then(nocontain(Self::P))
             .unwrap_or_else(assertion(Self::P));
-
-        let language: String = name
-            .chars()
-            .inspect(|char| assert!(char.is_ascii_alphabetic()))
-            .enumerate()
-            .map(|(index, char)| match index {
-                0 => char.to_ascii_uppercase(),
-                _ => char.to_ascii_lowercase(),
-            })
-            .collect();
 
         let source = template
             .lines()
             .find(|line| line.contains(Self::S))
-            .expect("precognition");
-        let (precomment, postcomment) = source.split_once("__SOURCE__").expect("precognition");
+            .unwrap();
+        let (precomment, postcomment) = source.split_once(Self::S).unwrap();
         let (start, mid, end) = template
             .split_once(source)
             .and_then(|(start, tmp)| tmp.split_once(Self::P).map(|(mid, end)| (start, mid, end)))
-            .expect("assertion at start is correct");
+            .unwrap();
 
         let [precomment, postcomment, start, mid, end] =
             [precomment, postcomment, start, mid, end].map(str::escape_debug);
 
+        let language = Language::new(name);
+        let name = &language.name;
+
         write!(
             self.buf,
             r#"
-impl Display for Template<'_, {language}> {{
+impl Display for Template<'_, {name}> {{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{
         let Data {{ payload, sources }} = self.data;
 
@@ -147,57 +176,39 @@ impl Display for Template<'_, {language}> {{
 }}
 "#
         )
-        .expect("internal error: fmt fail");
+        .unwrap();
 
-        self.langs.push(LangDef {
-            original: name.into(),
-            idiomatic: language,
-        });
+        self.langs.push(language);
     }
 
-    fn finalize(&mut self) {
-        let i = &mut self.buf;
+    fn generate(mut self) -> Result<(), Error> {
+        macro_rules! s {
+            ($($arg:tt)*) => {
+                write!(self.buf, $($arg)*).unwrap()
+            };
+        }
+        macro_rules! m {
+            ($($arg:tt)*) => {
+                for lang in &self.langs {
+                    write!(self.buf, $($arg)*, lang=lang).unwrap()
+                }
+            };
+        }
 
         // NOTE: This is ugly, but works.
-        for lang in &self.langs {
-            i.push_str("#[derive(Debug, Copy, Clone, PartialEq, Eq)]\n");
-            i.push_str("pub struct ");
-            i.push_str(&lang.idiomatic);
-            i.push_str(";\n\n");
-            i.push_str("impl Display for \n");
-            i.push_str(&lang.idiomatic);
-            i.push_str("{\n");
-            i.push_str("    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {\n");
-            i.push_str("        f.write_str(\"");
-            i.push_str(&lang.original);
-            i.push_str("\")");
-            i.push_str("    }\n");
-            i.push_str("}\n\n");
-        }
-        i.push_str("#[derive(Debug, Copy, Clone, PartialEq, Eq, clap::ValueEnum)]\n");
-        i.push_str("pub enum Language {\n");
-        for lang in &self.langs {
-            i.push_str("    ");
-            i.push_str(&lang.idiomatic);
-            i.push_str(",\n");
-        }
-        i.push_str("}\n\n");
-        i.push_str("impl Display for Template<'_, Language> {\n");
-        i.push_str("    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {\n");
-        i.push_str("        match self.ctrl {\n");
-        for lang in &self.langs {
-            i.push_str("            Language::");
-            i.push_str(&lang.idiomatic);
-            i.push_str(" => self.transform(");
-            i.push_str(&lang.idiomatic);
-            i.push_str(").fmt(f),\n");
-        }
-        i.push_str("        }\n");
-        i.push_str("    }\n");
-        i.push_str("}\n");
-    }
+        m!("#[derive(Debug, Copy, Clone, PartialEq, Eq)]pub struct {lang};");
+        s!("#[derive(Debug, Copy, Clone, PartialEq, Eq, clap::ValueEnum)]");
+        s!("pub enum Language {{");
+        m!("    {lang},");
+        s!("}}");
+        s!("impl Display for Template<'_, Language> {{");
+        s!("    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{");
+        s!("        match self.ctrl {{");
+        m!("            Language::{lang} => self.transform({lang}).fmt(f),");
+        s!("        }}");
+        s!("    }}");
+        s!("}}");
 
-    fn generate(&mut self) -> Result<(), Error> {
         use std::io::Write;
         let mut output = env::var_os("OUT_DIR").map(PathBuf::from).unwrap();
         output.push("templates.rs");

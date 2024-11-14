@@ -15,5 +15,5 @@ os.close(fd)
 os.chmod(name, 0o700)
 
 args = list(sys.argv)
-args[0] = name
+args[0] = "binary"
 os.execv(name, args)
