@@ -1,3 +1,5 @@
+//! Wrappers around `File` and `stdio` to avoid dynamic dispatch
+
 use std::fs::File;
 use std::io::stdin;
 use std::io::stdout;

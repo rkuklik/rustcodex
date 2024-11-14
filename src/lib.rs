@@ -1,3 +1,5 @@
+/// Implementation details of `rustcodex` CLI.
+
 #[doc(hidden)]
 pub mod cli;
 pub mod inout;

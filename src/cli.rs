@@ -8,6 +8,7 @@ use clap::ValueHint;
 pub struct Cli {
     /// Language to target as host
     // `Cli` is inlined into build script, but `Language` is generated from it.
+    // So it might be a good idea not to create unresolveable recursion.
     #[cfg(nonrecursive)]
     #[arg(short, long, env)]
     pub target: crate::lang::Language,
@@ -16,11 +17,11 @@ pub struct Cli {
     #[arg(short, long = "source", env, value_hint = ValueHint::FilePath, num_args = 0..)]
     pub sources: Vec<PathBuf>,
 
-    /// Input (defaults to stdin)
+    /// Input file (defaults to stdin)
     #[arg(short, long, env, value_hint = ValueHint::FilePath)]
     pub input: Option<PathBuf>,
 
-    /// Output (defaults to stdout)
+    /// Output file (defaults to stdout)
     #[arg(short, long, env)]
     pub output: Option<PathBuf>,
 }

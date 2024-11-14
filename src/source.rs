@@ -1,3 +1,5 @@
+//! Helpers for inlining sorurce code
+
 use std::cmp::Ordering;
 use std::fs::metadata;
 use std::fs::read_dir;
@@ -6,8 +8,10 @@ use std::io::Error;
 use std::io::Read;
 use std::path::Path;
 
+/// Single file loaded in memory
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
+    // holds name and code in a single buffer separated by `split`
     inner: Box<str>,
     split: usize,
 }
@@ -52,7 +56,7 @@ impl SourceFile {
         for entry in read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
-            Self::extend(buf, path)?
+            Self::extend(buf, path)?;
         }
         Ok(())
     }

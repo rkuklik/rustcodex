@@ -12,6 +12,7 @@ use flate2::Compression;
 
 use crate::source::SourceFile;
 
+/// Adapter between `io::Write` and `fmt::Write`
 struct IoCompat<'m, 'f> {
     f: &'m mut Formatter<'f>,
 }
@@ -48,18 +49,9 @@ impl<'a> Display for Compressor<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Data<'s> {
-    payload: &'s [u8],
-    sources: &'s [SourceFile],
-}
-
-impl<'s> Data<'s> {
-    pub fn new(payload: &'s [u8], sources: &'s [SourceFile]) -> Self {
-        Self { payload, sources }
-    }
-}
-
+/// Formatter for to-be inlined source code
+///
+/// `start` and `end` are start and end of comment provided by template
 struct CodeInliner<'s> {
     start: &'static str,
     end: &'static str,
@@ -84,6 +76,20 @@ impl<'s> Display for CodeInliner<'s> {
     }
 }
 
+/// Reference to in-memory data
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Data<'s> {
+    payload: &'s [u8],
+    sources: &'s [SourceFile],
+}
+
+impl<'s> Data<'s> {
+    pub fn new(payload: &'s [u8], sources: &'s [SourceFile]) -> Self {
+        Self { payload, sources }
+    }
+}
+
+/// Template container
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Template<'d, T> {
     data: Data<'d>,
@@ -114,4 +120,5 @@ where
     }
 }
 
+// import language and template definitions generated in `build.rs`
 include!(concat!(env!("OUT_DIR"), "/templates.rs"));
