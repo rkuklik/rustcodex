@@ -26,7 +26,7 @@ fn main() -> Result<(), Error> {
     // generate code for each template in `templates` directory
     for template in read_dir("templates")? {
         let file = template?;
-        assert!(file.file_type()?.is_file());
+        assert!(file.file_type()?.is_file(), "template must be a file");
         let name = file.file_name();
         let name = name.to_str().expect("UTF-8 name");
 
@@ -47,16 +47,17 @@ fn main() -> Result<(), Error> {
 
     // HACK: generate completion
     let mut app = Cli::command();
+    // keep in sync with `src/cli.rs`
     app = app.arg(
         Arg::new("target")
-            .help("Language to target as host")
+            .help("Output language")
             .long("target")
             .short('t')
             .env("TARGET")
             .value_parser(PossibleValuesParser::new(langs)),
     );
 
-    for shell in [Shell::Bash, Shell::Zsh, Shell::Fish] {
+    for shell in [Shell::Bash, Shell::Zsh, Shell::Fish, Shell::PowerShell] {
         generate_to(shell, &mut app, APP, DIR)?;
     }
 
@@ -184,22 +185,36 @@ impl Display for Template<'_, {name}> {{
     fn generate(mut self) -> Result<(), Error> {
         macro_rules! s {
             ($($arg:tt)*) => {
-                write!(self.buf, $($arg)*).unwrap()
+                writeln!(self.buf, $($arg)*).unwrap()
             };
         }
         macro_rules! m {
             ($($arg:tt)*) => {
                 for lang in &self.langs {
-                    write!(self.buf, $($arg)*, lang=lang).unwrap()
+                    s!($($arg)*, lang=lang)
                 }
             };
         }
 
-        // NOTE: This is ugly, but works.
-        m!("#[derive(Debug, Copy, Clone, PartialEq, Eq)]pub struct {lang};");
+        for lang in &self.langs {
+            s!("/// {lang} template parameter, to be used in `Template<'_, {lang}>`");
+            s!("#[derive(Debug, Copy, Clone, PartialEq, Eq)]");
+            s!("pub struct {lang};");
+        }
+        s!("/// Enumeration of all available languages");
         s!("#[derive(Debug, Copy, Clone, PartialEq, Eq, clap::ValueEnum)]");
         s!("pub enum Language {{");
         m!("    {lang},");
+        s!("}}");
+        s!("impl Language {{");
+        s!("    /// Number of included languages");
+        s!("    pub const COUNT: usize = {};", self.langs.len());
+        s!("    /// Array of all included languages");
+        s!("    pub const fn all() -> [Self; Self::COUNT] {{");
+        s!("        [");
+        m!("            Self::{lang},");
+        s!("        ]");
+        s!("    }}");
         s!("}}");
         s!("impl Display for Template<'_, Language> {{");
         s!("    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{");

@@ -14,6 +14,7 @@ use terminator::Terminator;
 use terminator::Verbosity;
 
 fn main() -> Result<(), Terminator> {
+    // nicer backtrace and error fmt
     Config::new()
         .verbosity(Verbosity::error().unwrap_or(Verbosity::Medium))
         .install()?;

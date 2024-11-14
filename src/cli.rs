@@ -6,14 +6,15 @@ use clap::ValueHint;
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
 #[command(author, version, about, arg_required_else_help = true)]
 pub struct Cli {
-    /// Language to target as host
+    /// Output language
     // `Cli` is inlined into build script, but `Language` is generated from it.
     // So it might be a good idea not to create unresolveable recursion.
+    // keep in sync with `build.rs`
     #[cfg(nonrecursive)]
     #[arg(short, long, env)]
     pub target: crate::lang::Language,
 
-    /// Manually specified source files
+    /// Source files and directories
     #[arg(short, long = "source", env, value_hint = ValueHint::FilePath, num_args = 0..)]
     pub sources: Vec<PathBuf>,
 

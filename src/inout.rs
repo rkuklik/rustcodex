@@ -16,10 +16,12 @@ pub enum Input {
 }
 
 impl Input {
+    /// Locks `stdin` for reading
     pub fn stdio() -> Self {
         Self::Stdio(stdin().lock())
     }
 
+    /// Opens the file at `path` for reading
     pub fn file(path: impl AsRef<Path>) -> Result<Self, Error> {
         File::options()
             .read(true)
@@ -46,10 +48,12 @@ pub enum Output {
 }
 
 impl Output {
+    /// Locks `stdout` for writing
     pub fn stdio() -> Self {
         Self::Stdio(stdout().lock())
     }
 
+    /// Opens the file at `path` for writing
     pub fn file(path: impl AsRef<Path>) -> Result<Self, Error> {
         File::options()
             .read(false)

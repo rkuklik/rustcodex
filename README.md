@@ -43,3 +43,16 @@ Additionally, the template should should `exec` uncompressed payload, passing th
 
 Failure to comply with directive requirements will result in punishment manifesting
 in build error.
+
+## Obtaining the binary
+
+### Requirements
+
+- [Rust](https://www.rust-lang.org/) v1.82.0 or greater
+- [Computer with tier 1 support with host tools](https://doc.rust-lang.org/nightly/rustc/platform-support.html)
+
+### Build
+
+Run `cargo build --profile release` to obtain optimized binary or
+`cargo build --profile small` to get trimmed down binary. Resulting program
+will be located in `target/_profile_/rustcodex`.

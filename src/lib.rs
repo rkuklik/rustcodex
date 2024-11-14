@@ -1,4 +1,4 @@
-/// Implementation details of `rustcodex` CLI.
+/// Implementation detail of `rustcodex` CLI.
 
 #[doc(hidden)]
 pub mod cli;

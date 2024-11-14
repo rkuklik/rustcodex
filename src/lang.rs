@@ -1,3 +1,5 @@
+//! Runtime support for template instantiation
+
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -31,6 +33,7 @@ impl<'m, 'f> Write for IoCompat<'m, 'f> {
     }
 }
 
+/// Writes the payload as compressed base64 encoded string
 struct Compressor<'a> {
     payload: &'a [u8],
 }
@@ -76,7 +79,7 @@ impl<'s> Display for CodeInliner<'s> {
     }
 }
 
-/// Reference to in-memory data
+/// Reference to in-memory program data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Data<'s> {
     payload: &'s [u8],
@@ -103,6 +106,7 @@ impl<'d> Template<'d, ()> {
 }
 
 impl<'d, T> Template<'d, T> {
+    /// Change controller of the template
     pub fn transform<U>(self, new: U) -> Template<'d, U> {
         Template {
             data: self.data,
@@ -115,6 +119,7 @@ impl<'d, T: 'd> Template<'d, T>
 where
     Self: Display,
 {
+    /// Dispatch the template dynamically
     pub fn erase(self) -> Box<dyn Display + 'd> {
         Box::new(self)
     }

@@ -8,7 +8,7 @@ use std::io::Error;
 use std::io::Read;
 use std::path::Path;
 
-/// Single file loaded in memory
+/// Single file (including its name) loaded in memory
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
     // holds name and code in a single buffer separated by `split`
@@ -17,6 +17,7 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
+    /// Read each `path` in `paths` recursively
     pub fn load<I, P>(paths: I) -> Result<Vec<Self>, Error>
     where
         P: AsRef<Path>,
@@ -29,10 +30,15 @@ impl SourceFile {
         Ok(buf)
     }
 
+    /// Read the file located at `path`
     pub fn read(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let mut file = File::open(path)?;
-        let mut buf = path.display().to_string();
+        let mut buf = String::new();
+        match path.to_str() {
+            Some(name) => buf += name,
+            None => buf = path.display().to_string(),
+        }
         let split = buf.len();
         buf.try_reserve_exact(file.metadata()?.len() as usize)?;
         file.read_to_string(&mut buf)?;
@@ -42,11 +48,6 @@ impl SourceFile {
         })
     }
 
-    pub fn read_recursive(path: impl AsRef<Path>) -> Result<Vec<Self>, Error> {
-        let mut buf = Vec::new();
-        Self::extend(&mut buf, path).map(|()| buf)
-    }
-
     fn extend(buf: &mut Vec<Self>, path: impl AsRef<Path>) -> Result<(), Error> {
         let path = path.as_ref();
         if !metadata(path)?.is_dir() {
@@ -54,17 +55,17 @@ impl SourceFile {
             return Ok(());
         }
         for entry in read_dir(path)? {
-            let entry = entry?;
-            let path = entry.path();
-            Self::extend(buf, path)?;
+            Self::extend(buf, entry?.path())?;
         }
         Ok(())
     }
 
+    /// Returns the original path with which the `SourceFile` was constructed
     pub fn name(&self) -> &str {
         &self.inner[0..self.split]
     }
 
+    /// Returns contents of the file
     pub fn code(&self) -> &str {
         &self.inner[self.split..]
     }
