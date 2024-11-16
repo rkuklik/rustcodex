@@ -14,7 +14,7 @@ pub struct Cli {
     #[arg(short, long, env)]
     pub target: crate::lang::Language,
 
-    /// Source files and directories
+    /// Paths to UTF-8 encoded source files
     #[arg(short, long = "source", env, value_hint = ValueHint::FilePath, num_args = 0..)]
     pub sources: Vec<PathBuf>,
 

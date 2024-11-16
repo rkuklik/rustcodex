@@ -26,7 +26,7 @@ fn main() -> Result<(), Terminator> {
         output,
     } = Cli::parse();
 
-    let sources = SourceFile::load(sources)?;
+    let sources = SourceFile::load(sources).context("failed to load source files")?;
 
     let mut payload = Vec::new();
     match input {

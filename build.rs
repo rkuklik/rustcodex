@@ -153,6 +153,7 @@ impl TemplateGen {
         self.langs.push(Language::new(template, name));
     }
 
+    /// Write rust code to `target`
     fn generate<W: Write>(&self, target: &mut W) -> Result<(), Error> {
         macro_rules! s {
             ($($arg:tt)*) => {
@@ -171,9 +172,11 @@ impl TemplateGen {
         for lang in &self.langs {
             let [pre, post, start, mid, end] = lang.components().map(str::escape_debug);
             let name = &lang.name;
+
             s!(r#"/// {name} template parameter, to be used in `Template<'_, {name}>`"#);
             s!(r#"#[derive(Debug, Copy, Clone, PartialEq, Eq)]"#);
             s!(r#"pub struct {name};"#);
+
             s!(r#"impl Display for Template<'_, {name}> {{"#);
             s!(r#"    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{"#);
             s!(r#"        let Data {{ payload, sources }} = self.data;"#);
@@ -183,33 +186,36 @@ impl TemplateGen {
             s!(r#"            end: "{post}","#);
             s!(r#"        }};"#);
             s!(r#"        let payload = Compressor {{ payload }};"#);
+
             s!(r#"        f.write_str("{start}")?;"#);
             s!(r#"        write!(f, "{{source}}")?;"#);
             s!(r#"        f.write_str("{mid}")?;"#);
             s!(r#"        write!(f, "{{payload}}")?;"#);
             s!(r#"        f.write_str("{end}")?;"#);
-            s!(r#""#);
+
             s!(r#"        Ok(())"#);
             s!(r#"    }}"#);
             s!(r#"}}"#);
         }
-        let count = self.langs.len();
+
         // generate enumeration
+        let count = self.langs.len();
         s!(r#"/// Enumeration of all available languages"#);
         s!(r#"#[derive(Debug, Copy, Clone, PartialEq, Eq, clap::ValueEnum)]"#);
+        s!(r#"#[non_exhaustive]"#);
         s!(r#"pub enum Language {{"#);
         m!(r#"    {lang},"#);
         s!(r#"}}"#);
+
         s!(r#"impl Language {{"#);
         s!(r#"    /// Number of included languages"#);
         s!(r#"    pub const COUNT: usize = {count};"#);
         s!(r#"    /// Array of all included languages"#);
-        s!(r#"    pub const fn all() -> [Self; Self::COUNT] {{"#);
-        s!(r#"        ["#);
-        m!(r#"            Self::{lang},"#);
-        s!(r#"        ]"#);
-        s!(r#"    }}"#);
+        s!(r#"    pub const ALL: [Self; Self::COUNT] = ["#);
+        m!(r#"        Self::{lang},"#);
+        s!(r#"    ];"#);
         s!(r#"}}"#);
+
         s!(r#"impl Display for Template<'_, Language> {{"#);
         s!(r#"    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{"#);
         s!(r#"        match self.ctrl {{"#);
