@@ -34,24 +34,31 @@ fn main() -> Result<(), Error> {
     for template in read_dir("templates")? {
         let file = template?;
         assert!(file.file_type()?.is_file(), "template must be a file");
-        let name = file.file_name();
-        let name = name.to_str().expect("UTF-8 name");
+        let mut name = file.file_name().into_encoded_bytes();
+        let dot = name
+            .iter()
+            .position(|byte| *byte == b'.')
+            .expect("template name must be in format `language.suffix`");
+        name.truncate(dot);
+        let name = String::from_utf8(name).expect("UTF-8 name");
 
-        let language = name
-            .split_once('.')
-            .expect("template name must be in format `language.suffix`")
-            .0;
         let template = read_to_string(file.path())?;
 
-        codegen.add(template, language);
+        codegen.add(template, name);
     }
 
     codegen.generate(&mut target)?;
 
     let langs = codegen
         .langs
-        .iter()
-        .map(|lang| lang.name.to_ascii_lowercase());
+        .into_iter()
+        .map(|lang| lang.name)
+        .map(|mut lang| {
+            lang.get_mut(0..1)
+                .expect("language name can't be empty")
+                .make_ascii_lowercase();
+            lang
+        });
     // HACK: generate completion
     // keep in sync with `src/cli.rs`
     let mut app = Cli::command().arg(
@@ -89,7 +96,7 @@ impl Language {
     const S: &str = "__SOURCE__";
     const P: &str = "__PAYLOAD__";
 
-    fn new(template: String, name: &str) -> Self {
+    fn new(template: String, name: String) -> Self {
         let assertion = |tag| move || panic!("template must contain single {tag} directive");
         fn second<'a>((_, second): (&str, &'a str)) -> &'a str {
             second
@@ -107,19 +114,13 @@ impl Language {
             .map(second)
             .and_then(nocontain(Self::P))
             .unwrap_or_else(assertion(Self::P));
-        let msg = "language name must be only Ascii alphabetic";
-        Self {
-            template,
-            name: name
-                .chars()
-                .inspect(|char| assert!(char.is_ascii_alphabetic(), "{msg}"))
-                .enumerate()
-                .map(|(index, char)| match index {
-                    0 => char.to_ascii_uppercase(),
-                    _ => char.to_ascii_lowercase(),
-                })
-                .collect(),
+        for byte in name.bytes() {
+            assert!(
+                byte.is_ascii_alphanumeric(),
+                "language name must be only ASCII"
+            );
         }
+        Self { template, name }
     }
 
     fn components(&self) -> [&str; 5] {
@@ -133,7 +134,7 @@ impl Language {
             .template
             .split_once(source)
             .and_then(|(s, t)| t.split_once(Self::P).map(|(m, e)| (s, m, e)))
-            .unwrap();
+            .unwrap_or_else(|| panic!("directives can't be on one line: in {}", self.name));
         [precomment, postcomment, start, mid, end]
     }
 }
@@ -149,8 +150,14 @@ impl TemplateGen {
     }
 
     /// Add language definition to generator
-    fn add(&mut self, template: String, name: &str) {
-        self.langs.push(Language::new(template, name));
+    fn add(&mut self, template: String, mut name: String) {
+        name.get_mut(0..1)
+            .expect("language name can't be empty")
+            .make_ascii_uppercase();
+        let Err(index) = self.langs.binary_search_by(|lang| lang.name.cmp(&name)) else {
+            panic!("language {name} has multiple definitions");
+        };
+        self.langs.insert(index, Language::new(template, name));
     }
 
     /// Write rust code to `target`
@@ -168,17 +175,22 @@ impl TemplateGen {
             };
         }
 
+        assert!(
+            self.langs.is_sorted_by_key(|lang| lang.name.as_str()),
+            "languages are sorted",
+        );
+
         // generate fmt routines
         for lang in &self.langs {
             let [pre, post, start, mid, end] = lang.components().map(str::escape_debug);
-            let name = &lang.name;
+            let name = lang.name.as_str();
 
             s!(r#"/// {name} template parameter, to be used in `Template<'_, {name}>`"#);
             s!(r#"#[derive(Debug, Copy, Clone, PartialEq, Eq)]"#);
             s!(r#"pub struct {name};"#);
 
-            s!(r#"impl Display for Template<'_, {name}> {{"#);
-            s!(r#"    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{"#);
+            s!(r#"impl ::std::fmt::Display for Template<'_, {name}> {{"#);
+            s!(r#"    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {{"#);
             s!(r#"        let Data {{ payload, sources }} = self.data;"#);
             s!(r#"        let source = CodeInliner {{"#);
             s!(r#"            files: sources,"#);
@@ -216,8 +228,10 @@ impl TemplateGen {
         s!(r#"    ];"#);
         s!(r#"}}"#);
 
-        s!(r#"impl Display for Template<'_, Language> {{"#);
-        s!(r#"    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {{"#);
+        s!(r#"impl ::std::fmt::Display for Template<'_, Language> {{"#);
+        s!(r#"    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {{"#);
+        s!(r#"        #[allow(unused_imports)]"#);
+        s!(r#"        use ::std::fmt::Display;"#);
         s!(r#"        match self.ctrl {{"#);
         m!(r#"            Language::{lang} => self.transform({lang}).fmt(f),"#);
         s!(r#"        }}"#);
