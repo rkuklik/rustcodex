@@ -80,7 +80,7 @@ impl<'s> Display for CodeInliner<'s> {
             s!("");
             s!("SOURCE FILE: {name}");
             for line in code.lines() {
-                s!("{line}")
+                s!("{line}");
             }
         }
 

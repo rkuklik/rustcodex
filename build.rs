@@ -97,13 +97,13 @@ impl Language {
     const P: &str = "__PAYLOAD__";
 
     fn new(template: String, name: String) -> Self {
-        let assertion = |tag| move || panic!("template must contain single {tag} directive");
         fn second<'a>((_, second): (&str, &'a str)) -> &'a str {
             second
         }
         fn nocontain(tag: &'static str) -> impl Fn(&str) -> Option<&str> {
             move |next: &str| (!next.contains(tag)).then_some(next)
         }
+        let assertion = |tag| move || panic!("template must contain single {tag} directive");
         // verify template directive correctness
         template
             .split_once(Self::S)
@@ -120,7 +120,7 @@ impl Language {
                 "language name must be only ASCII"
             );
         }
-        Self { template, name }
+        Self { name, template }
     }
 
     fn components(&self) -> [&str; 5] {

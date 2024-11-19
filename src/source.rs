@@ -25,7 +25,7 @@ impl SourceFile {
     {
         let mut buf = Vec::new();
         for path in paths {
-            Self::extend(&mut buf, path)?
+            Self::extend(&mut buf, path)?;
         }
         Ok(buf)
     }
