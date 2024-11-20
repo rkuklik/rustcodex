@@ -27,6 +27,7 @@ impl SourceFile {
         for path in paths {
             Self::extend(&mut buf, path)?;
         }
+        buf.sort_unstable();
         Ok(buf)
     }
 
@@ -62,7 +63,7 @@ impl SourceFile {
 
     /// Returns the original path with which the `SourceFile` was constructed
     pub fn name(&self) -> &str {
-        &self.inner[0..self.split]
+        &self.inner[..self.split]
     }
 
     /// Returns contents of the file

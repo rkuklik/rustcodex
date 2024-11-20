@@ -46,7 +46,6 @@ fn main() -> Result<(), Error> {
 
         codegen.add(template, name);
     }
-
     codegen.generate(&mut target)?;
 
     let langs = codegen

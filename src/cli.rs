@@ -15,16 +15,16 @@ pub struct Cli {
     pub target: crate::lang::Language,
 
     /// Paths to UTF-8 encoded source files
-    #[arg(short, long = "source", env, value_hint = ValueHint::FilePath, num_args = 0..)]
-    pub sources: Vec<PathBuf>,
+    #[arg(short, long, env, value_hint = ValueHint::FilePath, num_args = 0..)]
+    pub source: Vec<PathBuf>,
 
-    /// Input file (defaults to stdin)
+    /// Input file with `-` for stdin
     #[arg(short, long, env, value_hint = ValueHint::FilePath)]
-    pub input: Option<PathBuf>,
+    pub input: PathBuf,
 
-    /// Output file (defaults to stdout)
+    /// Output file with `-` for stdout
     #[arg(short, long, env)]
-    pub output: Option<PathBuf>,
+    pub output: PathBuf,
 }
 
 impl Cli {

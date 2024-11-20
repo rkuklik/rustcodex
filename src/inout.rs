@@ -16,6 +16,16 @@ pub enum Input {
 }
 
 impl Input {
+    /// Uses stdin if path is `-`, opens file otherwise.
+    pub fn parse(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = path.as_ref();
+        let output = match path.as_os_str().as_encoded_bytes() {
+            b"-" => Self::stdio(),
+            _ => Self::file(path)?,
+        };
+        Ok(output)
+    }
+
     /// Locks `stdin` for reading
     pub fn stdio() -> Self {
         Self::Stdio(stdin().lock())
@@ -48,6 +58,16 @@ pub enum Output {
 }
 
 impl Output {
+    /// Uses stdout if path is `-`, opens file otherwise.
+    pub fn parse(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = path.as_ref();
+        let input = match path.as_os_str().as_encoded_bytes() {
+            b"-" => Self::stdio(),
+            _ => Self::file(path)?,
+        };
+        Ok(input)
+    }
+
     /// Locks `stdout` for writing
     pub fn stdio() -> Self {
         Self::Stdio(stdout().lock())

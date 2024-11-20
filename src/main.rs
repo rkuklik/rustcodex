@@ -21,26 +21,20 @@ fn main() -> Result<(), Terminator> {
 
     let Cli {
         target,
-        sources,
+        source,
         input,
         output,
     } = Cli::parse();
 
-    let sources = SourceFile::load(sources).context("failed to load source files")?;
+    let sources = SourceFile::load(source).context("failed to load source files")?;
 
     let mut payload = Vec::new();
-    match input {
-        None => Input::stdio().read_to_end(&mut payload)?,
-        Some(path) => Input::file(path)
-            .context("opening input file failed")?
-            .read_to_end(&mut payload)
-            .context("input isn't readable")?,
-    };
+    Input::parse(input)
+        .context("opening input file failed")?
+        .read_to_end(&mut payload)
+        .context("input isn't readable")?;
 
-    let output = match output {
-        None => Output::stdio(),
-        Some(path) => Output::file(path).context("opening output file failed")?,
-    };
+    let output = Output::parse(output).context("opening output file failed")?;
 
     let template = Template::new(Data::new(&payload, &sources)).transform(target);
 
