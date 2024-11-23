@@ -8,7 +8,7 @@ using System.Text;
 class RustCoDex {
     private static string payload = "__PAYLOAD__";
 
-    static void Main(string[] args) {
+    public static int Main(string[] args) {
         string path = Path.GetTempFileName();
 
         using (var memory = new MemoryStream(Convert.FromBase64String(payload)))
@@ -24,10 +24,10 @@ class RustCoDex {
             }
         }
 
-        #pragma warning disable CA1416
-        UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-        File.SetUnixFileMode(path, mode);
-        #pragma warning restore CA1416
+        if (!OperatingSystem.IsWindows()) {
+            UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+            File.SetUnixFileMode(path, mode);
+        }
         
         var info = new ProcessStartInfo {
             FileName = path,
@@ -44,6 +44,6 @@ class RustCoDex {
         process.StartInfo = info;
         process.Start();
         process.WaitForExit();
-        Environment.Exit(process.ExitCode);
+        return process.ExitCode;
     }
 }
