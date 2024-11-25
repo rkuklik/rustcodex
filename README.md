@@ -19,8 +19,11 @@ annotating the output with comments containing source code inline. Do note that
 the executable can be anything, which can be started via `exec` (on Linux, this
 can even be a script with a shebang, for instance). Every input must have UTF-8
 encoding, except for the input binary. All encountered IO errors are bubbled up
-to the user for examination. The behavior of produced output shall be identical
-to that of the input, except for runtime initialization (speed) overhead.
+to the user for examination. The output shall be source code for user selected
+programming language. The observable behavior of produced output, when compiled
+or interpreted, shall be identical to that of the input, except for runtime
+speed and memory overhead. There are also no guarantees on other resource usage,
+such as threads and files.
 
 ## Usage
 
@@ -35,6 +38,18 @@ rustcodex \
     --target python \
     --source Cargo.toml build.rs src
 ```
+
+### Known limitations
+
+1. Only latest version of each language (as of today, 2024-11-25), are supported.
+   Other may work though.
+2. Produced source code is not guaranteed to compile if produced payload is larger
+   than implementation defined literal size limit. The same goes with file size due
+   to inlined comments. For example, `JVM` languages set it at $2^{16}-1$ bytes.
+3. Produced source code may require additional configuration to compile.
+   For instance, `C#` requires valid `csproj` with `.NET` framework.
+4. Inlined executable will work only if its runtime dependencies are present on
+   the machine and `exec` style functions are able to start it.
 
 ## Obtaining the binary
 
@@ -63,11 +78,34 @@ Apart from code itself, the template must contain two directives (literal string
 source code into the final output. `__PAYLOAD__` directive will be replaced with
 base64 encoded gzip compressed binary. `__SOURCE__` must come before `__PAYLOAD__`.
 
-Additionally, the template should `exec` uncompressed payload, passing through
-`argv` with `argv[0]` set to `binary`.
+If possible, the template should `exec` uncompressed payload, passing through
+`argv`. Failure to comply with directive requirements will result in punishment
+manifesting as build error.
 
-Failure to comply with directive requirements will result in punishment manifesting
-as build error.
+### Template compilation
+
+Templates are parsed and inlined into the source code at build-time. While
+it would be fairly trivial to load them at runtime, there is intentionally
+no support for that.
+
+This tool is intended to be without runtime dependencies, apart from those
+required by target triple. Loading templates at runtime would require the
+user to install them into a suitable directory. They would also pose a
+security concern, as any user with write permissions could (maliciously)
+overwrite them and thanks to that execute arbitrary code. Only suitable
+location would be read-only system directory, complicating install process
+and requiring administrator privileges.
+
+While parsing the templates at build time slightly complicates the codebase,
+prolongs build time and increases binary size, it was deemed to be worth the
+hassle. Moreover, as a nice side effect of this decision, the **only** way to
+define new or modify old templates is by editing files in `templates` directory.
+This couples them tightly to the codebase, improves integration and prevents
+breaking changes to their syntax or semantics from being observed by the user.
+If they change in backward incompatible ways, the tool will not build until
+all errors are fixed. This will be the case if/when custom payload pipelines
+are implemented, such as splitting payload to compilable chunks for `JVM`
+languages or multiple outputs. Perhaps in second semester?
 
 ### Internals
 
@@ -77,4 +115,3 @@ into Rust code (which can be viewed from generated documentation via source butt
 However, given that the source code is self-explanatory, canonical info about behavior
 is found there. Good entrypoint is `main.rs`, which references basically all internals
 of `rustcodex`.
-
