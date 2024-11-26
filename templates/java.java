@@ -30,8 +30,11 @@ public class Main {
 
         file.setExecutable(true);
 
-        List<String> cmd = new ArrayList<String>(List.of(args));
-        cmd.addFirst(file.getAbsolutePath());
+        List<String> cmd = new ArrayList<String>(args.length + 1);
+        cmd.add(file.getAbsolutePath());
+        for (String arg : args) {
+            cmd.add(arg);
+        }
         int code = new ProcessBuilder(cmd).inheritIO().start().waitFor();
         System.exit(code);
     }
