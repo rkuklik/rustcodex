@@ -5,8 +5,9 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 build = "build.rs"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nonrecursive)'] }
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(generated)']
 
 [lints.clippy]
 correctness = "deny"

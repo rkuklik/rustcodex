@@ -135,4 +135,6 @@ where
 }
 
 // import language and template definitions generated in `build.rs`
-include!(concat!(env!("OUT_DIR"), "/templates.rs"));
+// given there can be issues with cross-compilation, the build sets
+// the correct separator for build platform. Keep in sync!
+include!(concat!(env!("OUT_DIR"), env!("SEPARATOR"), "templates.rs"));

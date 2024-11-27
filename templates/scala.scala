@@ -31,7 +31,7 @@ object RustCoDex:
     file.setExecutable(true)
 
     val cmd = ArrayList[String](args.length + 1)
-    cmd.add(file.getAbsolutePath());
+    cmd.add(file.getAbsolutePath())
     for (arg <- args) {
       cmd.add(arg)
     }

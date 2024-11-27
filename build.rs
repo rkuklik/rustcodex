@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
 use std::io::Write;
+use std::path::MAIN_SEPARATOR;
 
 use clap::builder::PossibleValuesParser;
 use clap::Arg;
@@ -34,6 +35,7 @@ fn main() -> Result<(), Error> {
     for template in read_dir("templates")? {
         let file = template?;
         assert!(file.file_type()?.is_file(), "template must be a file");
+
         let mut name = file.file_name().into_encoded_bytes();
         let dot = name
             .iter()
@@ -77,11 +79,11 @@ fn main() -> Result<(), Error> {
         generate_to(shell, &mut app, APP, DIR)?;
     }
 
-    // add cargo directives
     println!("cargo::rerun-if-changed=templates");
     println!("cargo::rerun-if-changed=src/cli.rs");
     println!("cargo::rerun-if-changed=src/target.rs");
-    println!("cargo::rustc-cfg=nonrecursive");
+    println!("cargo::rustc-cfg=generated");
+    println!("cargo::rustc-env=SEPARATOR={MAIN_SEPARATOR}");
 
     Ok(())
 }
