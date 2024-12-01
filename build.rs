@@ -1,4 +1,4 @@
-use std::env::var_os;
+use std::env::var;
 use std::fs::create_dir_all;
 use std::fs::exists;
 use std::fs::read_dir;
@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::io::Error;
 use std::io::Write;
-use std::path::MAIN_SEPARATOR;
+use std::path::MAIN_SEPARATOR_STR;
 
 use clap::builder::PossibleValuesParser;
 use clap::Arg;
@@ -21,14 +21,16 @@ const APP: &str = "rustcodex";
 include!("src/cli.rs");
 
 fn main() -> Result<(), Error> {
-    let mut output = var_os("OUT_DIR").map(PathBuf::from).unwrap();
-    output.push("templates.rs");
+    let path = var("OUT_DIR").expect("Rust expects UTF-8 paths for `env!`")
+        + MAIN_SEPARATOR_STR
+        + "templates.rs";
+    let path = path.as_str();
     let mut target = BufWriter::new(
         File::options()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(output)?,
+            .open(path)?,
     );
 
     let mut codegen = TemplateGen::new();
@@ -43,9 +45,7 @@ fn main() -> Result<(), Error> {
             .expect("template name must be in format `language.suffix`");
         name.truncate(dot);
         let name = String::from_utf8(name).expect("UTF-8 name");
-
         let template = read_to_string(file.path())?;
-
         codegen.add(template, name);
     }
     codegen.generate(&mut target)?;
@@ -83,7 +83,7 @@ fn main() -> Result<(), Error> {
     println!("cargo::rerun-if-changed=src/cli.rs");
     println!("cargo::rerun-if-changed=src/target.rs");
     println!("cargo::rustc-cfg=generated");
-    println!("cargo::rustc-env=SEPARATOR={MAIN_SEPARATOR}");
+    println!("cargo::rustc-env=GENERATED={path}");
 
     Ok(())
 }
@@ -117,8 +117,8 @@ impl Language {
             .unwrap_or_else(assertion(Self::P));
         for byte in name.bytes() {
             assert!(
-                byte.is_ascii_alphanumeric(),
-                "language name must be only ASCII"
+                byte.is_ascii_alphabetic(),
+                "language name must be only ASCII alphabetic"
             );
         }
         Self { name, template }

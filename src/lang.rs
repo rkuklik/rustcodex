@@ -134,7 +134,11 @@ where
     }
 }
 
-// import language and template definitions generated in `build.rs`
-// given there can be issues with cross-compilation, the build sets
-// the correct separator for build platform. Keep in sync!
-include!(concat!(env!("OUT_DIR"), env!("SEPARATOR"), "templates.rs"));
+// Import language and template definitions generated in `build.rs`, which also
+// sets `GENERATED` location, which (due to `std` macro limitations) must be UTF-8.
+// In order not to deal with path separators and stuff, the build sets the correct
+// output path. Keep in sync!
+include!(env!(
+    "GENERATED",
+    "built templates are found via `GENERATED` env var"
+));
