@@ -114,9 +114,10 @@ impl<'d> Template<'d, ()> {
     }
 }
 
-impl<'d, T: Copy> Template<'d, T> {
+impl<'d, T: Copy /* `Copy` prevents `Drop` */> Template<'d, T> {
     /// Change controller of the template
-    pub const fn transform<U: Copy>(self, new: U) -> Template<'d, U> {
+    pub const fn transform<U>(self, new: U) -> Template<'d, U> {
+        // `Copy` prevents data loss
         Template {
             data: self.data,
             ctrl: new,
