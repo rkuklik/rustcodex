@@ -21,7 +21,7 @@ struct IoCompat<'m, 'f> {
     f: &'m mut Formatter<'f>,
 }
 
-impl<'m, 'f> Write for IoCompat<'m, 'f> {
+impl Write for IoCompat<'_, '_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.f
             .write_str(from_utf8(buf).map_err(|error| Error::new(ErrorKind::InvalidData, error))?)
@@ -38,7 +38,7 @@ struct Compressor<'a> {
     payload: &'a [u8],
 }
 
-impl<'a> Display for Compressor<'a> {
+impl Display for Compressor<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let iocompat = IoCompat { f };
         let error = "payload builder wrote invalid data";
@@ -61,13 +61,13 @@ struct CodeInliner<'s> {
     files: &'s [SourceFile],
 }
 
-impl<'s> Display for CodeInliner<'s> {
+impl Display for CodeInliner<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let Self { start, end, files } = *self;
 
         macro_rules! s {
             ($($arg:tt)*) => {
-                writeln!(f, "{start}{}{end}", format_args!($($arg)*))?
+                writeln!(f, "{start}{}{end}", format_args!($($arg)*))?;
             };
         }
 
@@ -96,7 +96,7 @@ pub struct Data<'s> {
 }
 
 impl<'s> Data<'s> {
-    pub fn new(payload: &'s [u8], sources: &'s [SourceFile]) -> Self {
+    pub const fn new(payload: &'s [u8], sources: &'s [SourceFile]) -> Self {
         Self { payload, sources }
     }
 }
@@ -109,14 +109,14 @@ pub struct Template<'d, T> {
 }
 
 impl<'d> Template<'d, ()> {
-    pub fn new(data: Data<'d>) -> Self {
+    pub const fn new(data: Data<'d>) -> Self {
         Self { data, ctrl: () }
     }
 }
 
-impl<'d, T> Template<'d, T> {
+impl<'d, T: Copy> Template<'d, T> {
     /// Change controller of the template
-    pub fn transform<U>(self, new: U) -> Template<'d, U> {
+    pub const fn transform<U: Copy>(self, new: U) -> Template<'d, U> {
         Template {
             data: self.data,
             ctrl: new,

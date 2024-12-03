@@ -98,10 +98,10 @@ impl Language {
     const P: &str = "__PAYLOAD__";
 
     fn new(template: String, name: String) -> Self {
-        fn second<'a>((_, second): (&str, &'a str)) -> &'a str {
+        const fn second<'a>((_, second): (&str, &'a str)) -> &'a str {
             second
         }
-        fn nocontain(tag: &'static str) -> impl Fn(&str) -> Option<&str> {
+        const fn nocontain(tag: &'static str) -> impl Fn(&str) -> Option<&str> {
             move |next: &str| (!next.contains(tag)).then_some(next)
         }
         let assertion = |tag| move || panic!("template must contain single {tag} directive");
@@ -130,7 +130,7 @@ impl Language {
             .lines()
             .find(|line| line.contains(Self::S))
             .unwrap();
-        let (precomment, postcomment) = source.split_once(Language::S).unwrap();
+        let (precomment, postcomment) = source.split_once(Self::S).unwrap();
         let (start, mid, end) = self
             .template
             .split_once(source)
@@ -146,7 +146,7 @@ struct TemplateGen {
 
 impl TemplateGen {
     /// Setup codegen
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { langs: Vec::new() }
     }
 
@@ -165,13 +165,13 @@ impl TemplateGen {
     fn generate<W: Write>(&self, target: &mut W) -> Result<(), Error> {
         macro_rules! s {
             ($($arg:tt)*) => {
-                writeln!(target, $($arg)*)?
+                writeln!(target, $($arg)*)?;
             };
         }
         macro_rules! m {
             ($($arg:tt)*) => {
                 for lang in &self.langs {
-                    s!($($arg)*, lang=lang.name)
+                    s!($($arg)*, lang=lang.name);
                 }
             };
         }
