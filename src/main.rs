@@ -1,23 +1,28 @@
+use std::env::set_var;
+use std::env::var_os;
 use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
 
 use anyhow::Context;
+use anyhow::Error;
 use rustcodex::cli::Cli;
 use rustcodex::inout::Input;
 use rustcodex::inout::Output;
 use rustcodex::lang::Data;
 use rustcodex::lang::Template;
 use rustcodex::source::SourceFile;
-use terminator::Config;
-use terminator::Terminator;
-use terminator::Verbosity;
 
-fn main() -> Result<(), Terminator> {
-    // nicer backtrace and error fmt
-    Config::new()
-        .verbosity(Verbosity::error().unwrap_or(Verbosity::Medium))
-        .install()?;
+static BACKTRACE: &str = "RUST_BACKTRACE";
+
+fn main() -> Result<(), Error> {
+    if var_os(BACKTRACE).is_none() {
+        // SAFETY: there are no other threads running before this function is called
+        unsafe {
+            // Always capture a backtrace
+            set_var(BACKTRACE, "full");
+        }
+    }
 
     let Cli {
         target,

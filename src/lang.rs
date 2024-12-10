@@ -139,7 +139,4 @@ where
 // sets `GENERATED` location, which (due to `std` macro limitations) must be UTF-8.
 // In order not to deal with path separators and stuff, the build sets the correct
 // output path. Keep in sync!
-include!(env!(
-    "GENERATED",
-    "built templates are found via `GENERATED` env var"
-));
+include!(env!("GENERATED"));

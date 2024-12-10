@@ -5,8 +5,11 @@ use std::fs::metadata;
 use std::fs::read_dir;
 use std::fs::File;
 use std::io::Error;
+use std::io::ErrorKind;
 use std::io::Read;
 use std::path::Path;
+
+use anyhow::Context;
 
 /// Single file (including its name) loaded in memory
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +28,7 @@ impl SourceFile {
     {
         let mut buf = Vec::new();
         for path in paths {
-            Self::extend(&mut buf, path)?;
+            Self::extend(&mut buf, path.as_ref())?;
         }
         buf.sort_unstable();
         Ok(buf)
@@ -35,11 +38,9 @@ impl SourceFile {
     pub fn read(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let mut file = File::open(path)?;
-        let mut buf = String::new();
-        match path.to_str() {
-            Some(name) => buf += name,
-            None => buf = path.display().to_string(),
-        }
+        let mut buf = path
+            .to_str()
+            .map_or_else(|| path.display().to_string(), String::from);
         let split = buf.len();
         buf.try_reserve_exact(file.metadata()?.len() as usize)?;
         file.read_to_string(&mut buf)?;
@@ -49,14 +50,15 @@ impl SourceFile {
         })
     }
 
-    fn extend(buf: &mut Vec<Self>, path: impl AsRef<Path>) -> Result<(), Error> {
-        let path = path.as_ref();
-        if !metadata(path)?.is_dir() {
-            buf.push(Self::read(path)?);
-            return Ok(());
+    fn extend(buf: &mut Vec<Self>, path: &Path) -> Result<(), Error> {
+        if metadata(path).map_or(true, |meta| !meta.is_dir()) {
+            return Self::read(path)
+                .with_context(|| format!("unable to read `{}`", path.display()))
+                .map_err(|msg| Error::new(ErrorKind::InvalidInput, msg))
+                .map(|source| buf.push(source));
         }
         for entry in read_dir(path)? {
-            Self::extend(buf, entry?.path())?;
+            Self::extend(buf, &entry?.path())?;
         }
         Ok(())
     }

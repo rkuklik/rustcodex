@@ -45,7 +45,8 @@ rustcodex \
    Other may work though.
 2. Produced source code is not guaranteed to compile if produced payload is larger
    than implementation defined literal size limit. The same goes with file size due
-   to inlined comments. For example, `JVM` languages set it at $2^{16}-1$ bytes.
+   to inlined comments. For example, `JVM` languages set literal limit at $2^{16}-1$
+   bytes.
 3. Produced source code may require additional configuration to compile.
    For instance, `C#` requires valid `csproj` with `.NET` framework.
 4. Inlined executable will work only if its runtime dependencies are present on
@@ -69,7 +70,7 @@ will be located in `target/_profile_/rustcodex`.
 ### Templates
 
 Templates are UTF-8 encoded files present in the `templates` directory, which
-will are parsed and inlined into the resulting binary on rebuild via `build.rs`.
+are parsed and inlined into the resulting binary on rebuild via `build.rs`.
 Filename is significant. It must contain at least one `.`, where the text
 preceding the first `.` will be used as the template's name.
 

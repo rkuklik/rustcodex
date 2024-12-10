@@ -20,7 +20,7 @@ const APP: &str = "rustcodex";
 
 include!("src/cli.rs");
 
-fn main() -> Result<(), Error> {
+fn main() {
     let path = var("OUT_DIR").expect("Rust expects UTF-8 paths for `env!`")
         + MAIN_SEPARATOR_STR
         + "templates.rs";
@@ -30,25 +30,34 @@ fn main() -> Result<(), Error> {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(path)?,
+            .open(path)
+            .expect("unable to open output file"),
     );
 
     let mut codegen = TemplateGen::new();
-    for template in read_dir("templates")? {
-        let file = template?;
-        assert!(file.file_type()?.is_file(), "template must be a file");
+    for template in read_dir("templates").expect("unable to read `templates`") {
+        let file = template.expect("critical error while reading `templates`");
+        let filename = || file.file_name().to_string_lossy().to_string();
+        assert!(
+            file.file_type().unwrap().is_file(),
+            "template `{}` must be a file",
+            filename()
+        );
 
         let mut name = file.file_name().into_encoded_bytes();
         let dot = name
             .iter()
             .position(|byte| *byte == b'.')
-            .expect("template name must be in format `language.suffix`");
+            .unwrap_or_else(|| panic!("template `{}` must be in format `lang.suffix`", filename()));
         name.truncate(dot);
         let name = String::from_utf8(name).expect("UTF-8 name");
-        let template = read_to_string(file.path())?;
+        let template = read_to_string(file.path())
+            .unwrap_or_else(|e| panic!("template `{}` reading failed: {e}", filename()));
         codegen.add(template, name);
     }
-    codegen.generate(&mut target)?;
+    codegen
+        .generate(&mut target)
+        .expect("code generation failed");
 
     let langs = codegen
         .langs
@@ -71,12 +80,13 @@ fn main() -> Result<(), Error> {
             .value_parser(PossibleValuesParser::new(langs)),
     );
 
-    if !exists(DIR)? {
-        create_dir_all(DIR)?;
+    if !exists(DIR).unwrap() {
+        create_dir_all(DIR).expect("creating completion directory failed");
     }
 
     for shell in [Shell::Bash, Shell::Zsh, Shell::Fish, Shell::PowerShell] {
-        generate_to(shell, &mut app, APP, DIR)?;
+        generate_to(shell, &mut app, APP, DIR)
+            .unwrap_or_else(|e| panic!("generating completion for {shell} failed: {e}"));
     }
 
     println!("cargo::rerun-if-changed=templates");
@@ -84,8 +94,6 @@ fn main() -> Result<(), Error> {
     println!("cargo::rerun-if-changed=src/target.rs");
     println!("cargo::rustc-cfg=generated");
     println!("cargo::rustc-env=GENERATED={path}");
-
-    Ok(())
 }
 
 struct Language {
@@ -104,7 +112,8 @@ impl Language {
         const fn nocontain(tag: &'static str) -> impl Fn(&str) -> Option<&str> {
             move |next: &str| (!next.contains(tag)).then_some(next)
         }
-        let assertion = |tag| move || panic!("template must contain single {tag} directive");
+        let nref = name.as_str();
+        let assertion = |tag| move || panic!("template {nref} must contain single {tag} directive");
         // verify template directive correctness
         template
             .split_once(Self::S)
@@ -115,7 +124,7 @@ impl Language {
             .map(second)
             .and_then(nocontain(Self::P))
             .unwrap_or_else(assertion(Self::P));
-        for byte in name.bytes() {
+        for byte in nref.bytes() {
             assert!(
                 byte.is_ascii_alphabetic(),
                 "language name must be only ASCII alphabetic"
@@ -201,9 +210,9 @@ impl TemplateGen {
             s!(r#"        let payload = Compressor {{ payload }};"#);
 
             s!(r#"        f.write_str("{start}")?;"#);
-            s!(r#"        write!(f, "{{source}}")?;"#);
+            s!(r#"        f.write_fmt(format_args!("{{source}}"))?;"#);
             s!(r#"        f.write_str("{mid}")?;"#);
-            s!(r#"        write!(f, "{{payload}}")?;"#);
+            s!(r#"        f.write_fmt(format_args!("{{payload}}"))?;"#);
             s!(r#"        f.write_str("{end}")?;"#);
 
             s!(r#"        Ok(())"#);

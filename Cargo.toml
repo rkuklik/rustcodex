@@ -15,15 +15,14 @@ suspicious = "deny"
 perf = "deny"
 style = "deny"
 complexity = "warn"
+nursery = "warn"
 #pedantic = "warn"
-#nursery = "warn"
 
 [dependencies]
 anyhow = "1.0"
 base64 = "0.22"
 clap = { version = "4.5", features = ["cargo", "derive", "env", "string"] }
 flate2 = "1.0"
-terminator = { version = "0.3", features = ["anyhow"] }
 
 [build-dependencies]
 clap_complete = "4.5"
